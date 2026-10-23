@@ -51,7 +51,11 @@ export CC="$TOOLCHAIN/bin/x86_64-linux-android${API}-clang"
 export AR="$TOOLCHAIN/bin/llvm-ar"
 export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
 export STRIP="$TOOLCHAIN/bin/llvm-strip"
-export CFLAGS="-O2 -fPIE"
+# -fcommon: dfu-util's src/dfu.h declares a tentative global "int debug;" that
+# is included by several .c files. Clang 11+/NDK default to -fno-common, which
+# makes the link fail with "duplicate symbol: debug". Use the historical
+# common-symbol behaviour so the definitions merge.
+export CFLAGS="-O2 -fPIE -fcommon"
 export LDFLAGS="-pie"
 export PKG_CONFIG_LIBDIR="$WORK/prefix/lib/pkgconfig"
 export PKG_CONFIG_PATH=""
