@@ -1,0 +1,38 @@
+name: Build Android x86_64 dfu-util
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool pkg-config make gcc g++ git
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;26.3.11579264"
+
+      - name: Build dfu-util for Android x86_64
+        run: ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264" ANDROID_API=23 ./build-android-x86_64.sh
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dfu-util-android-x86_64
+          path: dist/dfu-util
+          if-no-files-found: error
+          retention-days: 30
