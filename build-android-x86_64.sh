@@ -47,7 +47,10 @@ export PKG_CONFIG_ALLOW_CROSS=1
 # Configure libusb as a static Android library.
 (
   cd "$WORK/libusb-src"
-  ./autogen.sh
+  # NOCONFIGURE=1 stops autogen.sh from running a native configure: without
+  # --host, configure tries to execute Android binaries on the build host and
+  # fails with "cannot run C compiled programs". The cross configure runs below.
+  NOCONFIGURE=1 ./autogen.sh
   ./configure --host=x86_64-linux-android --prefix="$WORK/prefix" \
     --disable-udev --disable-shared --enable-static
   make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
