@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
@@ -25,6 +25,19 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
 }
 WORK="${BUILD_DIR:-$ROOT/.android-build}"
 mkdir -p "$WORK" "$ROOT/dist"
+
+# On failure, show the end of autoconf's config.log, where the real reason for
+# a configure error is recorded (the console only says "See config.log").
+on_error() {
+  local log
+  for log in "$WORK"/*-src/config.log; do
+    [[ -f "$log" ]] || continue
+    echo "::group::tail of $log" >&2
+    tail -n 80 "$log" >&2 || true
+    echo "::endgroup::" >&2
+  done
+}
+trap on_error ERR
 
 fetch() {
   local url="$1" path="$2"
