@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
@@ -26,6 +26,19 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
 WORK="${BUILD_DIR:-$ROOT/.android-build}"
 mkdir -p "$WORK" "$ROOT/dist"
 
+# On failure, show the end of autoconf's config.log, where the real reason for
+# a configure error is recorded (the console only says "See config.log").
+on_error() {
+  local log
+  for log in "$WORK"/*-src/config.log; do
+    [[ -f "$log" ]] || continue
+    echo "::group::tail of $log" >&2
+    tail -n 80 "$log" >&2 || true
+    echo "::endgroup::" >&2
+  done
+}
+trap on_error ERR
+
 fetch() {
   local url="$1" path="$2"
   if [[ ! -d "$path/.git" ]]; then git clone --depth 1 "$url" "$path"; else git -C "$path" pull --ff-only; fi
@@ -38,7 +51,11 @@ export CC="$TOOLCHAIN/bin/x86_64-linux-android${API}-clang"
 export AR="$TOOLCHAIN/bin/llvm-ar"
 export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
 export STRIP="$TOOLCHAIN/bin/llvm-strip"
-export CFLAGS="-O2 -fPIE"
+# -fcommon: dfu-util's src/dfu.h declares a tentative global "int debug;" that
+# is included by several .c files. Clang 11+/NDK default to -fno-common, which
+# makes the link fail with "duplicate symbol: debug". Use the historical
+# common-symbol behaviour so the definitions merge.
+export CFLAGS="-O2 -fPIE -fcommon"
 export LDFLAGS="-pie"
 export PKG_CONFIG_LIBDIR="$WORK/prefix/lib/pkgconfig"
 export PKG_CONFIG_PATH=""
@@ -47,7 +64,10 @@ export PKG_CONFIG_ALLOW_CROSS=1
 # Configure libusb as a static Android library.
 (
   cd "$WORK/libusb-src"
-  ./autogen.sh
+  # NOCONFIGURE=1 stops autogen.sh from running a native configure: without
+  # --host, configure tries to execute Android binaries on the build host and
+  # fails with "cannot run C compiled programs". The cross configure runs below.
+  NOCONFIGURE=1 ./autogen.sh
   ./configure --host=x86_64-linux-android --prefix="$WORK/prefix" \
     --disable-udev --disable-shared --enable-static
   make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
